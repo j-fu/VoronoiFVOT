@@ -4,13 +4,15 @@ Material for the coding session of the workshop [Finite Volumes and Optimal Tran
 
 ## Installation
 
-All material is provided in the [Julia](https://julialang.org) scientific computing language in form of [Pluto](https://github.com/fonsp/Pluto.jl) computational notebooks. Please follow the [Pluto installation instructions](https://plutojl.org/#install) to run these notebooks on your computer.
+All material is provided in the [Julia](https://julialang.org) scientific computing language in form of [Pluto](https://github.com/fonsp/Pluto.jl) computational notebooks.
+
+- [Julia installation instructions](https://julialang.org/downloads)
+- [Pluto installation instructions](https://plutojl.org/#install)
 
 ## Notebooks
 
-- Talk about the basics of Julia and VoronoiFVM.jl (julia|html|pdf)
-- Scalar Linear Fokker Planck
-- Poisson-Nernst-Planck with finite ion sizes
-- Template with (hopefully) helpful instructions
+- Julia Overview ([pluto](JuliaOverview.jl)|[html](rendered/JuliaOverview.html)|[pdf](rendered/JuliaOverview.pdf))
+- Intro to VoronoiFVM.jl
+- Template notebook
    
 
