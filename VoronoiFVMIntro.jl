@@ -43,7 +43,7 @@ using SimplexGridFactory: SimplexGridBuilder, point!, facet!, facetregion!, opti
 
 # ╔═╡ 79d579af-db38-49f6-beae-08246b41b09a
 begin
-    using VoronoiFVM: VoronoiFVM, solve, ramp, unknowns
+    using VoronoiFVM: VoronoiFVM, solve, ramp, unknowns, fbernoulli_pm
     using VoronoiFVM: boundary_dirichlet!, boundary_neumann!
 end
 
@@ -622,6 +622,166 @@ let
 end
 
 
+# ╔═╡ 05c24926-173c-4cbf-8bc9-9d3b099d0920
+md"""
+### Unipolar Drift-Diffusion
+"""
+
+# ╔═╡ 30d5bcaa-6029-4395-a102-e361d66f5fcd
+md"""
+See: C. Cancès, C. Chainais-Hillairet, J. Fuhrmann, and B. Gaudeul, "A numerical-analysis-focused comparison of several finite volume schemes for a unipolar degenerate drift-diffusion model" IMA Journal of Numerical Analysis, vol. 41, no. 1, pp. 271–314, 2021.  
+
+Available from [https://doi.org/10.1093/imanum/draa002](https://doi.org/10.1093/imanum/draa002),
+the preprint is on [arxiv1907.11126](https://arxiv.org/abs/1907.11126).
+
+The problem consists of a Poisson equation for the electrostatic potential $\phi$:
+
+```math
+-\nabla \varepsilon \nabla \phi = z(2c-1)
+```
+and a degenerate drift-diffusion equation of the transport of a charged species $c$:
+
+```math
+\partial_t u  - \nabla\cdot \left(\nabla c  + c \nabla (\phi - \log (1-c) )\right)
+```
+
+In particular, the paper, among others, investigates the "sedan" flux discretization which is able to handle the degeneracy coming from the $\log (1-c)$ term. The earliest reference to this scheme we found in the source code of the [SEDAN III](http://www-tcad.stanford.edu/tcad/programs/sedan3.html) semiconductor device simulator.
+
+"""
+
+# ╔═╡ 9147c449-d085-4eca-90b9-3552bbd83a11
+Base.@kwdef mutable struct UDDData
+    eps::Float64=1.0e-3
+    z::Float64=-1
+    ic::Int32=2
+    iphi::Int32=1
+    V::Float64=5
+	eps_reg::Float64=1.0e-10
+end
+
+# ╔═╡ a572155d-d7dd-44d2-a502-283c55720cce
+function uddstorage!(f, u, node, data)
+    ic = data.ic
+    iphi = data.iphi
+    f[iphi] = 0
+    f[ic] = u[ic]
+end
+
+# ╔═╡ e9c0d6cf-dc88-4218-9c65-1f25d1aed141
+function uddreaction!(f, u, node, data)
+    ic = data.ic
+    iphi = data.iphi
+    f[iphi] = data.z * (1 - 2 * u[ic])
+    f[ic] = 0
+end
+
+# ╔═╡ 6449cdd9-de0d-4b16-88af-07cef64b898e
+function classflux!(f, u, edge, data)
+    ic = data.ic
+    iphi = data.iphi
+    f[iphi] = data.eps * (u[iphi, 1] - u[iphi, 2])
+    bp, bm = fbernoulli_pm(u[iphi, 1] - u[iphi, 2])
+    f[ic] = bm * u[ic, 1] - bp * u[ic, 2]
+end
+
+# ╔═╡ d021f3e8-1cf1-41d9-b0b9-fd2515a1c7ea
+function sedanflux!(f, u, edge, data)
+	eps_reg=data.eps_reg
+    ic = data.ic
+    iphi = data.iphi
+    f[iphi] = data.eps * (u[iphi, 1] - u[iphi, 2])
+    mu1 = -log1p(max(-1+eps_reg, -u[ic, 1]))
+    mu2 = -log1p(max(-1+eps_reg, -u[ic, 2]))
+    bp, bm = fbernoulli_pm(data.z * 2 * (u[iphi, 1] - u[iphi, 2]) + (mu1 - mu2))
+    f[ic] = bm * u[ic, 1] - bp * u[ic, 2]
+end
+
+
+# ╔═╡ 3ab980c8-d413-4866-93ba-e151e8953f14
+function uddbc!(f, u, bnode, data)
+    V = ramp(bnode.time; dt = (0, 1.0e-2), du = (0, data.V))
+    boundary_dirichlet!(f, u, bnode; species = data.iphi, region = 1, value = V)
+    boundary_dirichlet!(f, u, bnode; species = data.iphi, region = 2, value = 0)
+    boundary_dirichlet!(f, u, bnode; species = data.ic, region = 2, value = 0.5)
+end
+
+# ╔═╡ a447e22f-ea2a-4aec-8457-3f974279d3fd
+udddata=UDDData()
+
+# ╔═╡ 78f48e4e-8c0d-4934-ab13-f1b5d9217af5
+uddgrid=simplexgrid(range(0,1,length=51))
+
+# ╔═╡ eda3c7c0-2184-4e7b-9360-d16d8e273660
+uddflux=sedanflux!
+
+# ╔═╡ 8316cf40-a4ce-4eef-8f2d-4bf9dd6a0084
+    uddphysics = VoronoiFVM.Physics(;
+                                 data = udddata,
+                                 flux = uddflux,
+                                 reaction = uddreaction!,
+                                 breaction = uddbc!,
+                                 storage = uddstorage!)
+
+# ╔═╡ 57b9dcf4-7555-477a-8bfb-eef22567700b
+uddsys=VoronoiFVM.System(uddgrid,uddphysics;species=[udddata.iphi, udddata.ic])
+
+
+# ╔═╡ 84db7ecd-38eb-4d3d-8f11-caf14bfe6a0e
+begin
+	uddinival = unknowns(uddsys)
+    uddinival[udddata.iphi, :] .= 0
+    uddinival[udddata.ic, :] .= 0.5
+	uddinival
+end
+
+# ╔═╡ 53ebe294-0f81-4873-9731-37f8a8eb4478
+begin
+        tstep = 1.0e-5
+        control = VoronoiFVM.SolverControl()
+        control.verbose = false
+        control.Δt_min = tstep
+        control.Δt = tstep
+        control.Δt_grow = 1.1
+        control.Δt_max = 0.1
+        control.Δu_opt = 0.1
+        control.damp_initial = 0.5
+end
+
+# ╔═╡ 3a09d130-b16d-483b-a41a-c4f490e23a10
+uddtsol = solve(uddsys;
+                     inival=uddinival,
+                     times = [0.0, 10],
+                     control, 
+		verbose="ne")
+
+# ╔═╡ 275cb89b-a5f2-40ce-b725-c7ee885b3e40
+@bind uddt PlutoUI.Slider(logrange(1.0e-5,uddtsol.t[end], 101), show_value=true)
+
+# ╔═╡ c7832513-84fc-4656-832c-3214a212fd11
+let
+     vis = GridVisualizer(size=(700,300), legend=:rt)
+               sol = uddtsol(uddt)
+            scalarplot!(vis,
+                        uddgrid,
+                        sol[udddata.iphi, :];
+                        label = "ϕ",
+                        title = "time=$(time)",
+                        flimits = (0, 5),
+                        color = :green,)
+            scalarplot!(vis,
+                        uddgrid,
+                        sol[udddata.ic, :];
+                        label = "c",
+                        flimits = (0, 5),
+                        clear = false,
+                        color = :red,)
+            reveal(vis)
+
+end
+
+# ╔═╡ 8b819d09-7931-460a-a1fe-d0ad72a94770
+VERSION
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -651,9 +811,9 @@ VoronoiFVM = "~2.5.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.6"
+julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "c0f88fbf21808a260e6ad04b38cabaa0e5944ca9"
+project_hash = "76d9d842f67528869a2f2278b2d98b9ab944b4df"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "30bb95a372787af850addf28ac937f1be7b79173"
@@ -742,7 +902,7 @@ version = "0.4.2"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.ArnoldiMethod]]
 deps = ["LinearAlgebra", "Random", "StaticArrays"]
@@ -794,6 +954,7 @@ weakdeps = ["SparseArrays"]
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
 
 [[deps.Automa]]
 deps = ["PrecompileTools", "SIMD", "TranscodingStreams"]
@@ -825,6 +986,7 @@ weakdeps = ["SparseArrays"]
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+version = "1.11.0"
 
 [[deps.Bijections]]
 git-tree-sha1 = "d8b0439d2be438a5f2cd68ec158fe08a7b2595b7"
@@ -856,6 +1018,7 @@ version = "0.2.6"
 
 [[deps.CRC32c]]
 uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
+version = "1.11.0"
 
 [[deps.CRlibm_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1033,6 +1196,7 @@ version = "1.0.0"
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+version = "1.11.0"
 
 [[deps.DelaunayTriangulation]]
 deps = ["AdaptivePredicates", "EnumX", "ExactPredicates", "PrecompileTools", "Random"]
@@ -1089,6 +1253,7 @@ version = "1.15.1"
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+version = "1.11.0"
 
 [[deps.Distributions]]
 deps = ["AliasTables", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
@@ -1306,6 +1471,7 @@ weakdeps = ["Mmap", "Test"]
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+version = "1.11.0"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra"]
@@ -1402,6 +1568,7 @@ version = "0.1.3"
 [[deps.Future]]
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+version = "1.11.0"
 
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
@@ -1599,6 +1766,7 @@ version = "2024.2.1+0"
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+version = "1.11.0"
 
 [[deps.Interpolations]]
 deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
@@ -1785,6 +1953,7 @@ version = "2.2.2"
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+version = "1.11.0"
 
 [[deps.LazyModules]]
 git-tree-sha1 = "a560dd966b386ac9ae60bdd3a3d3a326062d3c3e"
@@ -1799,16 +1968,17 @@ version = "0.6.4"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.4.0+0"
+version = "8.6.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+version = "1.11.0"
 
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.6.4+0"
+version = "1.7.2+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -1817,6 +1987,7 @@ version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
 
 [[deps.Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1875,6 +2046,7 @@ version = "0.9.1"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
 
 [[deps.LinearSolve]]
 deps = ["ArrayInterface", "ChainRulesCore", "ConcreteStructs", "DocStringExtensions", "EnumX", "FastLapackInterface", "GPUArraysCore", "InteractiveUtils", "KLU", "Krylov", "LazyArrays", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "PrecompileTools", "Preferences", "RecursiveFactorization", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Sparspak", "StaticArraysCore", "UnPack"]
@@ -1930,6 +2102,7 @@ version = "0.3.28"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+version = "1.11.0"
 
 [[deps.LoopVectorization]]
 deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensions", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
@@ -1989,6 +2162,7 @@ version = "0.4.2"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+version = "1.11.0"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
@@ -1999,7 +2173,7 @@ version = "0.6.2"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.2+1"
+version = "2.28.6+0"
 
 [[deps.MeshIO]]
 deps = ["ColorTypes", "FileIO", "GeometryBasics", "Printf"]
@@ -2015,6 +2189,7 @@ version = "1.2.0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
@@ -2024,7 +2199,7 @@ version = "0.3.4"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2023.1.10"
+version = "2023.12.12"
 
 [[deps.MuladdMacro]]
 git-tree-sha1 = "cac9cc5499c25554cba55cd3c30543cff5ca4fab"
@@ -2082,7 +2257,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+4"
+version = "0.3.27+1"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -2206,9 +2381,13 @@ uuid = "30392449-352a-5448-841d-b1acce4e97dc"
 version = "0.43.4+0"
 
 [[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.10.0"
+version = "1.11.0"
+weakdeps = ["REPL"]
+
+    [deps.Pkg.extensions]
+    REPLExt = "REPL"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -2284,6 +2463,7 @@ version = "0.5.6"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
@@ -2315,12 +2495,14 @@ version = "2.11.1"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 
 [[deps.REPL]]
-deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
+deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+version = "1.11.0"
 
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
 
 [[deps.RangeArrays]]
 git-tree-sha1 = "b9039e93773ddcfc828f12aadf7115b4b4d225f5"
@@ -2474,9 +2656,9 @@ weakdeps = ["SparseArrays", "StaticArraysCore"]
 
 [[deps.SciMLStructures]]
 deps = ["ArrayInterface"]
-git-tree-sha1 = "25514a6f200219cd1073e4ff23a6324e4a7efe64"
+git-tree-sha1 = "4cce08f7f8f9501edb1ea7b15360529745580e96"
 uuid = "53ae85a6-f571-4167-b2af-e1d143709226"
-version = "1.5.0"
+version = "1.6.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
@@ -2486,6 +2668,7 @@ version = "1.2.1"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
 
 [[deps.Setfield]]
 deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
@@ -2502,6 +2685,7 @@ version = "0.4.1"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+version = "1.11.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -2544,6 +2728,7 @@ version = "0.1.3"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
+version = "1.11.0"
 
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
@@ -2554,7 +2739,7 @@ version = "1.2.1"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.10.0"
+version = "1.11.0"
 
 [[deps.SparseDiffTools]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "Compat", "DataStructures", "FiniteDiff", "ForwardDiff", "Graphs", "LinearAlgebra", "PackageExtensionCompat", "Random", "Reexport", "SciMLOperators", "Setfield", "SparseArrays", "StaticArrayInterface", "StaticArrays", "UnPack", "VertexSafeGraphs"]
@@ -2638,9 +2823,14 @@ uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
 version = "1.4.3"
 
 [[deps.Statistics]]
-deps = ["LinearAlgebra", "SparseArrays"]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.10.0"
+version = "1.11.1"
+weakdeps = ["SparseArrays"]
+
+    [deps.Statistics.extensions]
+    SparseArraysExt = ["SparseArrays"]
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
@@ -2692,6 +2882,10 @@ version = "0.6.20"
     SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
+[[deps.StyledStrings]]
+uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+version = "1.11.0"
+
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
@@ -2699,7 +2893,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.2.1+1"
+version = "7.7.0+0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
@@ -2785,6 +2979,7 @@ version = "2.0.0"
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+version = "1.11.0"
 
 [[deps.TextWrap]]
 git-tree-sha1 = "43044b737fa70bc12f6105061d3da38f881a3e3c"
@@ -2861,6 +3056,7 @@ version = "1.5.1"
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+version = "1.11.0"
 
 [[deps.UnPack]]
 git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
@@ -2869,6 +3065,7 @@ version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
 
 [[deps.UnicodeFun]]
 deps = ["REPL"]
@@ -3073,7 +3270,7 @@ version = "1.4.0+0"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.52.0+1"
+version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -3197,5 +3394,24 @@ version = "3.6.0+0"
 # ╠═38616dcd-68bc-4db2-beff-62356db7f8c6
 # ╠═609cda4e-c3da-4fa8-b12a-5d5502c72cb4
 # ╠═d36aab9d-0336-48eb-bb9a-36bca84d6683
+# ╟─05c24926-173c-4cbf-8bc9-9d3b099d0920
+# ╟─30d5bcaa-6029-4395-a102-e361d66f5fcd
+# ╠═9147c449-d085-4eca-90b9-3552bbd83a11
+# ╠═a572155d-d7dd-44d2-a502-283c55720cce
+# ╠═e9c0d6cf-dc88-4218-9c65-1f25d1aed141
+# ╠═6449cdd9-de0d-4b16-88af-07cef64b898e
+# ╠═d021f3e8-1cf1-41d9-b0b9-fd2515a1c7ea
+# ╠═3ab980c8-d413-4866-93ba-e151e8953f14
+# ╠═a447e22f-ea2a-4aec-8457-3f974279d3fd
+# ╠═78f48e4e-8c0d-4934-ab13-f1b5d9217af5
+# ╠═eda3c7c0-2184-4e7b-9360-d16d8e273660
+# ╠═8316cf40-a4ce-4eef-8f2d-4bf9dd6a0084
+# ╠═57b9dcf4-7555-477a-8bfb-eef22567700b
+# ╠═84db7ecd-38eb-4d3d-8f11-caf14bfe6a0e
+# ╠═53ebe294-0f81-4873-9731-37f8a8eb4478
+# ╠═3a09d130-b16d-483b-a41a-c4f490e23a10
+# ╠═275cb89b-a5f2-40ce-b725-c7ee885b3e40
+# ╠═c7832513-84fc-4656-832c-3214a212fd11
+# ╠═8b819d09-7931-460a-a1fe-d0ad72a94770
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -22,8 +22,8 @@ begin
 	using ExtendableGrids# Manage grids, create rectangular grids
 	using SimplexGridFactory, Triangulate# Create grids with general geometry
 	using GridVisualize, CairoMakie # Visualization
-	CairoMakie.activate!(type="png")
-	GridVisualize.default_plotter!(CairoMakie)
+	CairoMakie.activate!(type="png") # Activate PNG graphics for CairoMakie
+	GridVisualize.default_plotter!(CairoMakie) # Activate CairoMakie as backend for GridVisualize
 	using PlutoUI# Sliders etc.
 end
 
@@ -38,7 +38,7 @@ v1.0, 2024-11-17
 """
 
 # ╔═╡ 03a2aa34-4e43-41ff-a026-2c0c35e5d5df
-PlutoUI.TableOfContents()
+PlutoUI.TableOfContents() # Show table of contents at the right
 
 # ╔═╡ 771ab604-5388-4417-9960-6e89eaadc4fa
 md"""
@@ -56,10 +56,10 @@ md"""
 """
 
 # ╔═╡ e8da2e71-04dd-43cc-82d3-117af0f26794
-X=range(0,1,length=101)
+X=range(0,1,length=101) 
 
 # ╔═╡ 75166f71-01e2-4fb5-b799-8f21ab200e5d
-grid1d=simplexgrid(X)
+grid1d=ExtendableGrids.simplexgrid(X)
 
 # ╔═╡ 003d0ccb-954d-4a4d-95a5-b031381bba41
 gridplot(grid1d, size=(700,200), legend=:rt)
@@ -74,10 +74,11 @@ Y=range(0,0.1, length=11)
 
 # ╔═╡ 7e0d48b4-7537-43d0-bf90-3f8ec2172306
 begin
-	grid2d=simplexgrid(X,Y)
-	bfacemask!(grid2d,[0,0], [1,1], 3, allow_new=false)
-	bfacemask!(grid2d,[0,0], [0,1], 1)
-	bfacemask!(grid2d,[1,0], [1,1], 2)
+	grid2d=ExtendableGrids.simplexgrid(X,Y)
+	# Edit standard boundary numbering:
+	ExtendableGrids.bfacemask!(grid2d,[0,0], [1,1], 3, allow_new=false)
+	ExtendableGrids.bfacemask!(grid2d,[0,0], [0,1], 1)
+	ExtendableGrids.bfacemask!(grid2d,[1,0], [1,1], 2)
 end
 
 
@@ -91,13 +92,17 @@ md"""
 
 # ╔═╡ 38d33474-d2c3-400b-978c-35e971fb60af
 begin
+	# Use SimplexGridFactory to create grid
     builder = SimplexGridBuilder(; Generator = Triangulate)
 
+	# Add points to the builder, returning their numbers
     p1 = point!(builder, 0, 0)
     p2 = point!(builder, 1, 0)
     p3 = point!(builder, 1, 0.2)
     p4 = point!(builder, 0, 0.1)
 
+	# Two points make one face
+	# Facetregions describe the boundary region number of the faces created next
     facetregion!(builder, 3)
     facet!(builder, p1, p2)
     facet!(builder, p3, p4)
@@ -106,8 +111,10 @@ begin
     facetregion!(builder, 2)
     facet!(builder, p2,p3)
 
+	# Set the maximum triangle area
     options!(builder; maxvolume = 1.0e-4)
 
+	# Creare grid
     ggrid2d = simplexgrid(builder)
 
 
@@ -144,6 +151,11 @@ in the time interval ``[0, t_{end}]``
 
 # ╔═╡ e942b344-4f87-464b-8084-84b5c7446a92
 function myflux(y,u, edge, data)
+	# Calculate the species fluxes between two neigboring control volumes resp. nodes
+	# y[ispecies] is the flux of i-th species
+	# u[ispecies, 1], u[ispeces,2] are the corresponding unknown values
+	# edge contains geometry information, region number, coordinates etc.
+	# data is the user data passed during system creation or during solve
 	(;D_1, D_2)= data
 	y[1]= D_1*(u[1,1]- u[1,2])
 	y[2]= D_2*(u[2,1]- u[2,2])
@@ -151,6 +163,11 @@ end
 
 # ╔═╡ 0a1a4108-e766-4853-a275-219fe96c47d4
 function myreaction(y, u, node, data)
+	# Calculate reaction term in one control volume
+	# y[ispecies] is the rate for i-th species
+	# u[ispecies] is the unknown value of i-th species
+	# node contains geometry info, region number, coordinate information
+	# data is the user data 
 	(;kp, km) = data
 	R=kp*u[1] - km*u[2]^2 
 	y[1]=R
@@ -160,6 +177,7 @@ end
 
 # ╔═╡ 666b5272-2923-4e4c-82e1-82278482e2a3
 function mystorage(y,u, node, data)
+	# Calculate the storage term in one control volume. Similar to reaction
 	y[1]=u[1]
 	y[2]=u[2]
 end
@@ -167,16 +185,49 @@ end
 
 # ╔═╡ ad3eae27-38f8-4a55-9594-a1c7bf8556e1
 function mybc(y,u, bnode, data)
+	# Calculate reaction at boundary. Similar to reaction with some
+	# Additionally, special functions can be called for standard boundary
+	# conditions.
 	boundary_dirichlet!(y,u,bnode, species=1, value=1, region=1)
 	boundary_dirichlet!(y,u,bnode, species=2, value=0, region=2)
+	# region-species pairs not covered here will have homogeneous Neumann bc.
 end
 
 
+# ╔═╡ 08b34fdb-baf7-42ae-aaf9-f64f319b60a5
+md"""
+   Data as tuple:
+"""
+
 # ╔═╡ 050fee95-6fe8-4730-acd8-2429e0a563c5
-mydata= (kp=1.0, km =0.1, D_1=1, D_2=0.1)
+datatuple= (kp=1.0, km =0.1, D_1=1, D_2=0.1)
+
+# ╔═╡ 050872b8-4c3a-4c40-80dd-308fe20a0591
+md"""
+Data as struct:
+"""
+
+# ╔═╡ ebc8e7d8-2afb-485c-9c0c-87dd258a5974
+Base.@kwdef struct DataStruct
+	kp::Float64=1.0
+    km::Float64=0.1
+    D_1::Float64=1
+    D_2::Float64=0.1
+end
+
+# ╔═╡ e284859d-6ab9-4d5b-9376-5472802cd8b8
+datastruct=DataStruct()
+
+# ╔═╡ 2468db11-200b-4a21-87fc-2928fdbd6d9e
+mydata=datastruct # datastruct or datatuple, see above
 
 # ╔═╡ 094d56e3-364a-4ceb-aa78-2a55d3d838e6
-mygrid=ggrid2d
+mygrid=ggrid2d # grid1d, grid2d, ggrid2d (see above)
+
+# ╔═╡ 0e5f88c3-a8df-4453-ae63-8eeaa6c92489
+md"""
+Create system from grid and physics data:
+"""
 
 # ╔═╡ a129fd40-fd1e-48c1-b9b0-0f8fd4bfc293
 mysystem=VoronoiFVM.System(mygrid; flux=myflux, reaction=myreaction, storage=mystorage, breaction=mybc, data=mydata, species=[1,2])
@@ -241,16 +292,16 @@ GridVisualize = "~1.8.2"
 PlutoUI = "~0.7.60"
 SimplexGridFactory = "~2.2.1"
 Triangulate = "~2.3.4"
-VoronoiFVM = "~2.5.0"
+VoronoiFVM = "~2.5.1"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.6"
+julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "f94a1cc8772875c363a0bb75bfccf7220a067a21"
+project_hash = "c17f901cf457788dfea12b8505f2b6f5d435c49b"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "30bb95a372787af850addf28ac937f1be7b79173"
@@ -343,7 +394,7 @@ version = "0.4.2"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.ArnoldiMethod]]
 deps = ["LinearAlgebra", "Random", "StaticArrays"]
@@ -395,6 +446,7 @@ weakdeps = ["SparseArrays"]
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
 
 [[deps.Automa]]
 deps = ["PrecompileTools", "SIMD", "TranscodingStreams"]
@@ -426,6 +478,7 @@ weakdeps = ["SparseArrays"]
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+version = "1.11.0"
 
 [[deps.Bijections]]
 git-tree-sha1 = "d8b0439d2be438a5f2cd68ec158fe08a7b2595b7"
@@ -457,6 +510,7 @@ version = "0.2.6"
 
 [[deps.CRC32c]]
 uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
+version = "1.11.0"
 
 [[deps.CRlibm_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -634,6 +688,7 @@ version = "1.0.0"
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+version = "1.11.0"
 
 [[deps.DelaunayTriangulation]]
 deps = ["AdaptivePredicates", "EnumX", "ExactPredicates", "PrecompileTools", "Random"]
@@ -656,6 +711,7 @@ version = "1.15.1"
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+version = "1.11.0"
 
 [[deps.Distributions]]
 deps = ["AliasTables", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
@@ -832,6 +888,7 @@ weakdeps = ["Mmap", "Test"]
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+version = "1.11.0"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra"]
@@ -928,6 +985,7 @@ version = "0.1.3"
 [[deps.Future]]
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+version = "1.11.0"
 
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
@@ -1125,6 +1183,7 @@ version = "2024.2.1+0"
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+version = "1.11.0"
 
 [[deps.Interpolations]]
 deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
@@ -1311,6 +1370,7 @@ version = "2.2.2"
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+version = "1.11.0"
 
 [[deps.LazyModules]]
 git-tree-sha1 = "a560dd966b386ac9ae60bdd3a3d3a326062d3c3e"
@@ -1325,16 +1385,17 @@ version = "0.6.4"
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.4.0+0"
+version = "8.6.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+version = "1.11.0"
 
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.6.4+0"
+version = "1.7.2+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -1343,6 +1404,7 @@ version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
 
 [[deps.Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1401,6 +1463,7 @@ version = "0.9.1"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
 
 [[deps.LinearSolve]]
 deps = ["ArrayInterface", "ChainRulesCore", "ConcreteStructs", "DocStringExtensions", "EnumX", "FastLapackInterface", "GPUArraysCore", "InteractiveUtils", "KLU", "Krylov", "LazyArrays", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "PrecompileTools", "Preferences", "RecursiveFactorization", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Sparspak", "StaticArraysCore", "UnPack"]
@@ -1456,6 +1519,7 @@ version = "0.3.28"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+version = "1.11.0"
 
 [[deps.LoopVectorization]]
 deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensions", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
@@ -1515,6 +1579,7 @@ version = "0.4.2"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+version = "1.11.0"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
@@ -1525,7 +1590,7 @@ version = "0.6.2"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.2+1"
+version = "2.28.6+0"
 
 [[deps.MeshIO]]
 deps = ["ColorTypes", "FileIO", "GeometryBasics", "Printf"]
@@ -1541,6 +1606,7 @@ version = "1.2.0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]
@@ -1550,7 +1616,7 @@ version = "0.3.4"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2023.1.10"
+version = "2023.12.12"
 
 [[deps.MultivariatePolynomials]]
 deps = ["ChainRulesCore", "DataStructures", "LinearAlgebra", "MutableArithmetics"]
@@ -1603,7 +1669,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+4"
+version = "0.3.27+1"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1699,9 +1765,13 @@ uuid = "30392449-352a-5448-841d-b1acce4e97dc"
 version = "0.43.4+0"
 
 [[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.10.0"
+version = "1.11.0"
+weakdeps = ["REPL"]
+
+    [deps.Pkg.extensions]
+    REPLExt = "REPL"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1759,6 +1829,7 @@ version = "0.5.6"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
 [[deps.ProgressMeter]]
 deps = ["Distributed", "Printf"]
@@ -1790,12 +1861,14 @@ version = "2.11.1"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 
 [[deps.REPL]]
-deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
+deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+version = "1.11.0"
 
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
 
 [[deps.RangeArrays]]
 git-tree-sha1 = "b9039e93773ddcfc828f12aadf7115b4b4d225f5"
@@ -1949,9 +2022,9 @@ weakdeps = ["SparseArrays", "StaticArraysCore"]
 
 [[deps.SciMLStructures]]
 deps = ["ArrayInterface"]
-git-tree-sha1 = "25514a6f200219cd1073e4ff23a6324e4a7efe64"
+git-tree-sha1 = "4cce08f7f8f9501edb1ea7b15360529745580e96"
 uuid = "53ae85a6-f571-4167-b2af-e1d143709226"
-version = "1.5.0"
+version = "1.6.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
@@ -1961,6 +2034,7 @@ version = "1.2.1"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
 
 [[deps.Setfield]]
 deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
@@ -1977,6 +2051,7 @@ version = "0.4.1"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+version = "1.11.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -2014,6 +2089,7 @@ version = "0.1.3"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
+version = "1.11.0"
 
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
@@ -2024,7 +2100,7 @@ version = "1.2.1"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.10.0"
+version = "1.11.0"
 
 [[deps.SparseDiffTools]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "Compat", "DataStructures", "FiniteDiff", "ForwardDiff", "Graphs", "LinearAlgebra", "PackageExtensionCompat", "Random", "Reexport", "SciMLOperators", "Setfield", "SparseArrays", "StaticArrayInterface", "StaticArrays", "UnPack", "VertexSafeGraphs"]
@@ -2108,9 +2184,14 @@ uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
 version = "1.4.3"
 
 [[deps.Statistics]]
-deps = ["LinearAlgebra", "SparseArrays"]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.10.0"
+version = "1.11.1"
+weakdeps = ["SparseArrays"]
+
+    [deps.Statistics.extensions]
+    SparseArraysExt = ["SparseArrays"]
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
@@ -2162,6 +2243,10 @@ version = "0.6.20"
     SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
+[[deps.StyledStrings]]
+uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+version = "1.11.0"
+
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
@@ -2169,7 +2254,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.2.1+1"
+version = "7.7.0+0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
@@ -2255,6 +2340,7 @@ version = "2.0.0"
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+version = "1.11.0"
 
 [[deps.TextWrap]]
 git-tree-sha1 = "43044b737fa70bc12f6105061d3da38f881a3e3c"
@@ -2325,6 +2411,7 @@ version = "1.5.1"
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+version = "1.11.0"
 
 [[deps.UnPack]]
 git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
@@ -2333,6 +2420,7 @@ version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
 
 [[deps.UnicodeFun]]
 deps = ["REPL"]
@@ -2376,9 +2464,9 @@ version = "0.2.0"
 
 [[deps.VoronoiFVM]]
 deps = ["BandedMatrices", "Colors", "CommonSolve", "DiffResults", "DocStringExtensions", "ExtendableGrids", "ExtendableSparse", "ForwardDiff", "GridVisualize", "InteractiveUtils", "JLD2", "LinearAlgebra", "LinearSolve", "Printf", "Random", "RecursiveArrayTools", "RecursiveFactorization", "SciMLBase", "SparseArrays", "SparseDiffTools", "StaticArrays", "Statistics", "Symbolics", "TextWrap"]
-git-tree-sha1 = "c07dbe65e11383370ec127416ec1671df4c6d38a"
+git-tree-sha1 = "4b35936a986caf6f1fea4350eaee5f98e80deaea"
 uuid = "82b139dc-5afc-11e9-35da-9b9bdfd336f3"
-version = "2.5.0"
+version = "2.5.1"
 
     [deps.VoronoiFVM.extensions]
     VoronoiFVMExtendableFEMBaseExt = "ExtendableFEMBase"
@@ -2537,7 +2625,7 @@ version = "1.4.0+0"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.52.0+1"
+version = "1.59.0+0"
 
 [[deps.oneTBB_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2587,8 +2675,14 @@ version = "3.6.0+0"
 # ╠═0a1a4108-e766-4853-a275-219fe96c47d4
 # ╠═666b5272-2923-4e4c-82e1-82278482e2a3
 # ╠═ad3eae27-38f8-4a55-9594-a1c7bf8556e1
+# ╟─08b34fdb-baf7-42ae-aaf9-f64f319b60a5
 # ╠═050fee95-6fe8-4730-acd8-2429e0a563c5
+# ╟─050872b8-4c3a-4c40-80dd-308fe20a0591
+# ╠═ebc8e7d8-2afb-485c-9c0c-87dd258a5974
+# ╠═e284859d-6ab9-4d5b-9376-5472802cd8b8
+# ╠═2468db11-200b-4a21-87fc-2928fdbd6d9e
 # ╠═094d56e3-364a-4ceb-aa78-2a55d3d838e6
+# ╟─0e5f88c3-a8df-4453-ae63-8eeaa6c92489
 # ╠═a129fd40-fd1e-48c1-b9b0-0f8fd4bfc293
 # ╟─a4536e3e-2d9f-4cd1-8eae-648f5bb92741
 # ╠═2a4c8cba-e9ed-414c-96c2-d4d7a33a07da
@@ -2597,7 +2691,7 @@ version = "3.6.0+0"
 # ╠═f69a402c-f8fa-40b2-8cb3-218d491220e3
 # ╠═9e133717-5aed-4669-af81-0439270ed5d6
 # ╠═36d6d372-9773-42e7-8d46-da1d8d503fde
-# ╟─ef225deb-6539-406e-a2d3-2ebfb834137d
+# ╠═ef225deb-6539-406e-a2d3-2ebfb834137d
 # ╠═78fb2b8b-8998-41e2-be4d-54f19a16ad0e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
