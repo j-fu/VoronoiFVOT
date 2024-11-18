@@ -11,6 +11,6 @@ All material is provided in the [Julia](https://julialang.org) scientific comput
 
 ## Notebooks
 
-- Julia Overview ([pluto](JuliaOverview.jl)|[pdf](rendered/JuliaOverview.pdf)|[html](https://html-preview.github.io/?url="https://raw.githubusercontent.com/j-fu/VoronoiFVOT/refs/heads/main/rendered/JuliaOverview.html")
+- Julia Overview ([pluto](JuliaOverview.jl)|[pdf](rendered/JuliaOverview.pdf)|[html](https://html-preview.github.io/?url=https://raw.githubusercontent.com/j-fu/VoronoiFVOT/refs/heads/main/rendered/JuliaOverview.html)
 - Intro to VoronoiFVM.jl
 - Template notebook
