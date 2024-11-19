@@ -62,12 +62,21 @@ md"""
 
 # ╔═╡ 88d1f4d1-2cfa-4117-b9c0-9fb7ccf1c8d7
 md"""
-v1.0, 2024-11-17
+__Jürgen Fuhrmann__, WIAS Berlin
+
+Workshop Finite Volumes for Optimal Transport
+
+Orsay, 2024-11-19
+"""
+
+# ╔═╡ 53553e06-a230-4b93-be8b-78418fcae721
+md"""
+The notebook code can be found on [https://github.com/j-fu/VoronoiFVOT](https://github.com/j-fu/VoronoiFVOT)
 """
 
 # ╔═╡ d629456d-02d9-477d-913f-5d31c31d19bb
 md"""
-VoronoiFVM.jl is a two point flux finite volume solver for nonlinear systems of PDEs on one-, two- and three-dimensional grids written in Julia.
+[VoronoiFVM.jl](https://github.com/WIAS-PDELib/VoronoiFVM.jl) is a two point flux finite volume solver for nonlinear systems of PDEs on one-, two- and three-dimensional grids written in Julia.
 
 As a Julia package, it depends on several packages from the Julia ecosystem. Several of them have been developed together with VoronoiFVM and belong to the WIAS-PDELib github organization.
 """
@@ -3298,6 +3307,7 @@ version = "3.6.0+0"
 # ╟─8f90879a-226e-46b6-a1d2-8de780fd8e07
 # ╟─784b4c3e-bb2a-4940-a83a-ed5e5898dfd4
 # ╟─88d1f4d1-2cfa-4117-b9c0-9fb7ccf1c8d7
+# ╟─53553e06-a230-4b93-be8b-78418fcae721
 # ╟─d629456d-02d9-477d-913f-5d31c31d19bb
 # ╟─b1f7911d-3079-4094-b1cb-d2fe2c49e56a
 # ╟─6e14f1f4-d7fa-49fc-b41e-f9cb2920897d

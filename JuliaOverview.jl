@@ -39,6 +39,11 @@ md"""
 ## 
 """
 
+# ╔═╡ beafc497-b43b-4c75-b1dc-9019281d74c1
+md"""
+The notebook code can be found on [https://github.com/j-fu/VoronoiFVOT](https://github.com/j-fu/VoronoiFVOT)
+"""
+
 # ╔═╡ d48c9367-4584-4b35-b5bd-0a4611c346f5
 TableOfContents()
 
@@ -156,6 +161,12 @@ md"""
    - Gridap.jl: Finite element package
    - Bifurcationkit.jl: Bifurcation analysis
    - Franklin.jl: Static website builder
+"""
+
+# ╔═╡ 9f29d412-59f0-44be-8ed2-24dfb5285f49
+md"""
+Packages on optimal transport
+- [JuliaOptimalTransport](https://github.com/JuliaOptimalTransport)
 """
 
 # ╔═╡ 51d36e03-2733-44b3-8e10-879979009814
@@ -482,9 +493,6 @@ md"""
 
 """
 
-# ╔═╡ 3353dadd-716b-4b8c-899d-405c9370f4b9
-
-
 # ╔═╡ 24b6ec59-7ce6-41d1-a690-c3f0551d49ef
 md"""
 ## Summary
@@ -516,7 +524,11 @@ Julia - an overview
 <br>
 <font size=+2>
 Jürgen Fuhrmann<br>
-WIAS Berlin
+WIAS Berlin<br>
+
+Workshop Finite Volumes & Optimal Transport<br>
+
+Orsay, 2024-11-19
 </font>
 </div>
 """,
@@ -3444,6 +3456,7 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╟─4465d920-6f9c-4fad-be06-99b584509307
 # ╟─0c02e9e8-0738-4f60-9d11-a191a51f0b03
+# ╠═beafc497-b43b-4c75-b1dc-9019281d74c1
 # ╟─d48c9367-4584-4b35-b5bd-0a4611c346f5
 # ╟─610c53d1-4799-46a5-afcd-c430c06a9a51
 # ╟─52f68b1b-5c25-4172-8ef6-0d64d41799ed
@@ -3462,6 +3475,7 @@ version = "1.4.1+1"
 # ╟─411c6277-472a-4c1c-9d52-86a0f703eed2
 # ╟─1dd98fc0-5ac7-44ce-a875-c05e82226604
 # ╟─d7c2d44b-9884-4e74-b89d-3c79b615d2ed
+# ╟─9f29d412-59f0-44be-8ed2-24dfb5285f49
 # ╟─51d36e03-2733-44b3-8e10-879979009814
 # ╠═3194fcf1-979a-41d2-a30d-dcf4ccefe4ce
 # ╠═a1468519-6b6f-4ff1-af0e-4cfca31bfe63
@@ -3523,7 +3537,6 @@ version = "1.4.1+1"
 # ╟─58c6c81d-ccda-42c3-8dd6-e6a911eb031d
 # ╟─34ac6ce8-ac40-462d-83e8-7137b419a826
 # ╟─32204809-2d89-4c16-9753-383b41c68472
-# ╟─3353dadd-716b-4b8c-899d-405c9370f4b9
 # ╟─24b6ec59-7ce6-41d1-a690-c3f0551d49ef
 # ╠═60941eaa-1aea-11eb-1277-97b991548781
 # ╠═ba31142b-bf0a-4b00-abae-4a7df41fb274
