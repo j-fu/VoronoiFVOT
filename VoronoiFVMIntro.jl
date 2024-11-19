@@ -765,7 +765,7 @@ let
                         uddgrid,
                         sol[udddata.iphi, :];
                         label = "ϕ",
-                        title = "time=$(time)",
+                        title = "time=$(uddt)",
                         flimits = (0, 5),
                         color = :green,)
             scalarplot!(vis,
@@ -778,9 +778,6 @@ let
             reveal(vis)
 
 end
-
-# ╔═╡ 8b819d09-7931-460a-a1fe-d0ad72a94770
-VERSION
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3412,6 +3409,5 @@ version = "3.6.0+0"
 # ╠═3a09d130-b16d-483b-a41a-c4f490e23a10
 # ╠═275cb89b-a5f2-40ce-b725-c7ee885b3e40
 # ╠═c7832513-84fc-4656-832c-3214a212fd11
-# ╠═8b819d09-7931-460a-a1fe-d0ad72a94770
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
