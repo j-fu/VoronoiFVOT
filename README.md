@@ -38,3 +38,9 @@ In order to download them, you can clone this repository, or
 - Julia Overview ([pluto](https://raw.githubusercontent.com/j-fu/VoronoiFVOT/refs/heads/main/JuliaOverview.jl)|[html](https://www.wias-berlin.de/people/fuhrmann/blobs/JuliaOverview.html)|[pdf](https://www.wias-berlin.de/people/fuhrmann/blobs/JuliaOverview.pdf))
 - Intro to VoronoiFVM.jl  ([pluto](https://raw.githubusercontent.com/j-fu/VoronoiFVOT/refs/heads/main/VoronoiFVMIntro.jl)|[html](https://www.wias-berlin.de/people/fuhrmann/blobs/VoronoiFVMIntro.html)|[pdf](https://www.wias-berlin.de/people/fuhrmann/blobs/VoronoiFVMIntro.pdf))
 - Template notebook  ([pluto](https://raw.githubusercontent.com/j-fu/VoronoiFVOT/refs/heads/main/VoronoiFVMTemplate.jl)|[html](https://www.wias-berlin.de/people/fuhrmann/blobs/VoronoiFVMTemplate.html)|[pdf](https://www.wias-berlin.de/people/fuhrmann/blobs/VoronoiFVMTemplatee.pdf))
+
+## Some additional links
+
+- [From Zero to Julia!](https://techytok.com/from-zero-to-julia/)
+- [Modern Julia Workflows](https://modernjuliaworkflows.org/)
+- [My (J.Fuhrmann's) remarks on Julia](https://j-fu.github.io/marginalia/julia/)
